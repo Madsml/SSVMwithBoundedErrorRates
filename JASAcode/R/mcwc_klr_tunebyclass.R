@@ -1,0 +1,141 @@
+# load the package needed
+require(gelnet)
+#############################################################################################################################
+#kernel function
+#############################################################################################################################
+LinearKern = function(x,y) {
+  kxx=tcrossprod(x,y)
+  return(kxx)
+}
+GaussKern = function(x,y,rho=1) {
+  x.one=x
+  y.one=y
+  x.one[]=1
+  y.one[]=1
+  kxx=exp((2*tcrossprod(x,y)-tcrossprod(x*x,y.one)-tcrossprod(x.one,y*y))/(rho)^2)
+  return(kxx)
+}
+PolyKern = function (x,y,degree=1) {
+  kxx=(tcrossprod(x,y))^degree
+  return(kxx)
+}
+# an advanced way to tune classification with confidence and give both ordinary and robust implementation 
+tune_klr_tbc = function(x_train,y_train,x_tune,y_tune,x_threshold=x_tune,y_threshold=y_tune,x_test,y_test,r,r_match,lambda_pool = 10^(-3:3),kernel='radial',rho_pool = 1,degree_pool=2) {
+  class_number = length(r)
+  # get the dimension
+  p = ncol(x_train)
+  n = nrow(x_train)
+  # create a big n_test*k matrix telling people which class each observation belongs to
+  n_test = length(y_test)
+  count_mat = matrix(0,nrow=n_test,ncol=class_number)
+  adjust_mat = matrix(0,nrow=n_test,ncol=class_number)
+  score_mat = matrix(0,nrow=n_test,ncol=class_number)
+  for (ii in 1:class_number) {
+    # generate a temporary label for training and tuning
+    y_train_temp = 2 * (0.5 - as.numeric(y_train == ii))
+    y_tune_temp = 2 * (0.5 - as.numeric(y_tune == ii))
+    y_test_temp = 2 * (0.5 - as.numeric(y_test == ii))
+    y_threshold_temp = 2 * (0.5 - as.numeric(y_threshold == ii))
+    # save the index for two classes of training and tuning data 
+    index_train = which(y_train_temp == -1)
+    index_tune = which(y_tune_temp == -1)
+    index_test = which(y_test_temp == -1)
+    index_threshold = which(y_threshold_temp == -1)
+    # get the threshold for tuning set 
+    thresh_robust = max(floor(r[ii]*length(index_threshold)),1)
+    thresh_adjust = max(floor(r_match[ii]*length(index_test)),1)
+    # initialize the ambiguity
+    errorrate = 1
+    best_degree = 0
+    best_rho =  0
+    # the tuning procedure to find best tuning parameter
+    for (i in 1:length(degree_pool)) {
+      for (j in 1:length(rho_pool)) {
+        for (k in 1:length(lambda_pool)) {
+          # get current parameter
+          degree = degree_pool[i]
+          rho = rho_pool[j]
+          lambda = lambda_pool[k]
+          # get the kernel matrix
+          if (kernel == 'linear') {
+            K=LinearKern(x_train,x_train)
+            K_tune=LinearKern(x_tune,x_train)
+            K_threshold = LinearKern(x_threshold,x_train)
+          } else if (kernel == 'radial') {
+            K=GaussKern(x_train,x_train,rho=rho)
+            K_tune=GaussKern(x_tune,x_train,rho = rho)
+            K_threshold=GaussKern(x_threshold,x_train,rho = rho)
+          } else if (kernel == 'polynomial') {
+            K=PolyKern(x_train,x_train,degree=degree) 
+            K_tune=PolyKern(x_tune,x_train,degree = degree)
+            K_threshold=PolyKern(x_threshold,x_train,degree = degree)
+          } else (return("Invalid kernel"))
+          # train the model with specified parameters
+          K = K + diag(1e-4,nrow(K))
+          model = gelnet.ker(K = K,y = factor(y_train_temp),lambda=lambda)
+          # scores for threshold set
+          score_threshold = -(K_threshold%*%model$v+model$b)
+          score_threshold_neg = score_threshold[index_threshold]
+          threshold_tune = sort(score_threshold_neg,decreasing = TRUE)[thresh_robust]
+          # scores for tuning set
+          score_tune = -(K_tune%*%model$v+model$b)
+          # check whether the missclassification rate decrease
+          yhat = as.numeric(score_tune>0)-as.numeric(score_tune<=0)
+          errorrate_temp = length(which(yhat!=y_tune_temp))/length(y_tune_temp)
+          if (errorrate_temp <= errorrate) {
+            errorrate = errorrate_temp
+            model_best = model
+            best_degree = degree
+            best_rho = rho
+            threshold_robust = threshold_tune
+          }  
+       }
+      }
+    }
+    # test the model performance
+    # get the kernel matrix
+    if (kernel == 'linear') {
+      K_test=LinearKern(x_test,x_train)
+    } else if (kernel == 'radial') {
+      K_test=GaussKern(x_test,x_train,rho = best_rho)
+    } else if (kernel == 'polynomial') {
+      K_test=PolyKern(x_test,x_train,degree = best_degree)
+    } else (return("Invalid kernel"))
+    # calculate scores for testing data
+    score_test = -(K_test%*%model_best$v+model_best$b)
+    # get adjusted threshold
+    score_test_neg = score_test[index_test]
+    threshold_test = sort(score_test_neg,decreasing = TRUE)[thresh_adjust]
+    # write the outcome onto counter and adj matrix
+    yhat_robust = rep(0,length(y_test)) - as.numeric(score_test<=threshold_robust)
+    yhat_adjust = rep(0,length(y_test)) - as.numeric(score_test<=threshold_test)
+    count_mat[which(yhat_robust==-1),ii] = 1
+    adjust_mat[which(yhat_adjust==-1),ii] = 1
+    score_mat[,ii] = -score_test
+  }
+  # fill in NULL region with a prediction of one vs all classifier
+  for (i in 1:n_test) {
+    if (max(count_mat[i,]) == 0) {count_mat[i,which.max(score_mat[i,])] = 1}
+    if (max(adjust_mat[i,]) == 0) {adjust_mat[i,which.max(score_mat[i,])] = 1}
+  }
+  # now let's see the performance
+  ambiguity_robust = sum(count_mat)/n_test
+  ambiguity_adjust = sum(adjust_mat)/n_test
+  # prepare for the performance chart
+  simulation = data.frame(matrix(0,nrow = 1, ncol = (2*(class_number+1))))
+  simulation[1,1] = ambiguity_robust
+  simulation[1,(class_number+2)] = ambiguity_adjust
+  robust_name = c()
+  adjust_name = c()
+  for (jj in 1:class_number) {
+    robust_name = c(robust_name,paste('uncover_class_',jj,'_robust',sep = ""))
+    adjust_name = c(adjust_name,paste('uncover_class_',jj,'_adjust',sep = ""))
+    simulation[1,(jj+1)] = 1 - (sum(count_mat[,jj]*as.numeric(y_test==jj))/sum(as.numeric(y_test==jj)))
+    simulation[1,(jj+class_number+2)] = 1 - (sum(adjust_mat[,jj]*as.numeric(y_test==jj))/sum(as.numeric(y_test==jj)))
+  }
+  colnames(simulation) = c('ambiguity_robust',robust_name,
+                           'ambiguity_adjust',adjust_name)
+  rownames(simulation) = c('klr_tbc')
+  # return performance of adjusted classification with confidence
+  return(list(simulation,count_mat,adjust_mat))
+}
