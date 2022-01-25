@@ -61,6 +61,6 @@ There is one folder for each real data scenario. In each folder, there is an R f
 
 ## Dependencies
 * ./JASAcode/R/MCSVMwC_nonconvex_cplex_robust depends on IBM Cplex (https://www.ibm.com/products/ilog-cplex-optimization-studio) which is a solver for quadratic programming. 
-* ./JASAcode/R/mcwc_klr depends on source code used in Meng et al. (2020). We include the code in ./Meng2020/ with author's concent.
+* ./JASAcode/R/mcwc_klr depends on source code used in Meng et al. (2020). We include the code in ./Meng2020/ with author's consent.
 * ./JASAcode/R/mcwc_svm depends on source code used in Lee et al. (2004). The code can be found in (https://www.asc.ohio-state.edu/lee.2272/software.html).
 * The rest of dependencies are public available R packages one can easily install with R.
