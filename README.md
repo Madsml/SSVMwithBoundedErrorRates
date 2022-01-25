@@ -22,6 +22,7 @@ The data sets we used for study are all publicly availalbe and all of them can b
 More detailed discription can be found in Section 5.3 Real Data Analysis in the main paper.
 
 ## Code
+We provide the code to run each simulation and real data analysis end to end. In order to get the same (or similar) number as reported, one can set random seeds from 0 to 99 to do 100 replications.
 
 ### 1. ./JASAcode/R/: 
 The folder contains a list of source code.
