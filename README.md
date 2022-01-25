@@ -3,13 +3,14 @@
 ## What does each folder mean?
 ### 1. R: 
 A list of source code. In particular
-#### 1.1. MCSVMwC_nonconvex_cplex_robust: This is the code for the proposed SSVM method used in the paper. Within the code, there are
+#### 1.1. MCSVMwC_nonconvex_cplex_robust: 
+This is the code for the proposed SSVM method used in the paper. Within the code, there are
 1) Training function mcsvmwc.qp.lp
 2) Inference function predict.mcsvmwc
 3) Tuning function mcsvmwc_tune and mcsvmwc_tune_robust where mcsvmwc_tune_robust uses a separate data set to calculate the threshold for acceptance region.
 
-#### 1.2. MCSVMwC_nonconvex_robust: This is the code for the proposed SSVM method. However, this code uses R package 'quadprog' to solve the quadratic programming.
-
+#### 1.2. MCSVMwC_nonconvex_robust: 
+This is the code for the proposed SSVM method. However, this code uses R package 'quadprog' to solve the quadratic programming.
 Rest codes are used to generate benchmark results:
 #### 1.3. lr: 
 The code with 'lr' utilize linear logistic regression to find the acceptance region.
