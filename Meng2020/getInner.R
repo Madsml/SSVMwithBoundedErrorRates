@@ -1,0 +1,1 @@
+getInner=function(obj, newdata=NULL, index=NULL) UseMethod('getInner')
